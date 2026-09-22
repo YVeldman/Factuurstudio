@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>FactuurStudio</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FactuurStudio">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --ink-light: #4a4a6a;
+    --ink-faint: #8888aa;
+    --paper: #f7f6f2;
+    --white: #ffffff;
+    --accent: #2d5016;
+    --accent-light: #4a7c28;
+    --line: #ddddd0;
+    --field-bg: #f0efe9;
+    --topbar-h: 52px;
+    --tabs-h: 48px;
+    --bottom-h: 68px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    background: var(--ink);
+    color: var(--white);
+    height: var(--topbar-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    flex-shrink: 0;
+    z-index: 50;
+  }
+  .topbar-title { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.01em; }
+  .topbar-title span { color: #a8c97f; }
+  .topbar-num {
+    font-size: 0.75rem;
+    color: #a8c97f;
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    background: var(--white);
+    border-bottom: 1px solid var(--line);
+    height: var(--tabs-h);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--ink-faint);
+    cursor: pointer;
+    gap: 3px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    padding-top: 4px;
+  }
+  .tab .tab-icon { font-size: 1.05rem; line-height: 1; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── PANELS ── */
+  .panels {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .panel {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: none;
+    padding: 20px 16px 80px;
+  }
+  .panel.active { display: block; }
+
+  /* Preview panel - geen eigen padding */
+  .panel.preview-panel {
+    padding: 16px 0 80px;
+    background: #e8e7e2;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .panel.preview-panel.active { display: flex; }
+
+  /* ── FORM ELEMENTEN ── */
+  .section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+    margin-top: 24px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .field { margin-bottom: 11px; }
+  .field label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--ink-light);
+    margin-bottom: 4px;
+  }
+  .field input, .field textarea, .field select {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    color: var(--ink);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    resize: none;
+  }
+  .field input:focus, .field textarea:focus {
+    border-color: var(--accent-light);
+    background: var(--white);
+  }
+  .field textarea { height: 72px; line-height: 1.5; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* ── TOGGLE ── */
+  .toggle-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .toggle-wrap label { font-size: 0.82rem; color: var(--ink-light); font-weight: 500; cursor: pointer; }
+  .toggle {
+    width: 44px; height: 24px; background: var(--line);
+    border-radius: 24px; position: relative; cursor: pointer;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent-light); }
+  .toggle::after {
+    content: ''; position: absolute;
+    width: 18px; height: 18px; background: white;
+    border-radius: 50%; top: 3px; left: 3px;
+    transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* ── REGELITEMS ── */
+  .item-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .item-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .item-card-header span {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .item-card input {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 9px 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .item-card input:last-child { margin-bottom: 0; }
+  .item-card input:focus { border-color: var(--accent-light); background: var(--white); }
+  .item-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .btn-del {
+    background: none; border: none; cursor: pointer;
+    color: #ccc; font-size: 1.2rem; line-height: 1; padding: 2px 6px;
+  }
+  .btn-del:active { color: #e05555; }
+
+  .btn-add {
+    background: none; border: 1.5px dashed var(--line);
+    border-radius: 8px; color: var(--ink-faint);
+    font-size: 0.82rem; padding: 12px; cursor: pointer;
+    width: 100%; text-align: center;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+  }
+  .btn-add:active { border-color: var(--accent-light); color: var(--accent); }
+
+  /* ── BOTTOM ACTIE-BALK ── */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--bottom-h);
+    background: var(--white);
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    z-index: 50;
+  }
+  .btn-preview {
+    flex: 0 0 auto;
+    background: var(--field-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 13px 18px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    cursor: pointer;
+  }
+  .btn-pdf {
+    flex: 1;
+    background: var(--accent);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    padding: 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .btn-pdf:active { background: var(--accent-light); }
+
+  /* ── PREVIEW DOCUMENT ── */
+  #invoice-doc {
+    background: var(--white);
+    width: 794px;
+    min-height: 1123px;
+    padding: 56px 60px 56px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 9.5pt;
+    color: var(--ink);
+    position: relative;
+    transform-origin: top center;
+  }
+
+  .doc-header { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 36px; }
+  .doc-logo { font-size: 20pt; font-weight: 600; color: var(--ink); line-height: 1.1; }
+  .doc-logo small { display: block; font-size: 7.5pt; color: var(--ink-faint); font-weight: 400; margin-top: 2px; }
+
+  .doc-meta { text-align: right; }
+  .factuur-title { font-size: 26pt; font-weight: 300; color: var(--accent); line-height: 1; letter-spacing: -0.01em; }
+  .doc-meta table { margin-left: auto; margin-top: 8px; }
+  .doc-meta td { padding: 1.5px 0; }
+  .doc-meta td:first-child { color: var(--ink-faint); padding-right: 14px; font-size: 7.5pt; }
+  .doc-meta td:last-child { font-weight: 500; text-align: right; }
+
+  .doc-divider { height: 2px; background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 40%, var(--line) 100%); margin-bottom: 28px; }
+
+  .addresses { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 32px; }
+  .addr-label { font-size: 7pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 7px; }
+  .addr-name { font-weight: 600; font-size: 10pt; margin-bottom: 3px; }
+  .addr-body { color: var(--ink-light); line-height: 1.6; font-size: 8.5pt; }
+
+  .items-table { width: 100%; border-collapse: collapse; }
+  .items-table thead tr { border-bottom: 1.5px solid var(--ink); }
+  .items-table thead th { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); padding: 0 0 8px; text-align: left; }
+  .items-table thead th:not(:first-child) { text-align: right; }
+  .items-table tbody tr { border-bottom: 1px solid var(--line); }
+  .items-table tbody td { padding: 10px 0; font-size: 9pt; vertical-align: top; }
+  .items-table tbody td:not(:first-child) { text-align: right; color: var(--ink-light); }
+
+  .totals-wrap { display: flex; justify-content: flex-end; margin-top: 18px; margin-bottom: 32px; }
+  .totals-table { width: 260px; }
+  .totals-table td { padding: 4px 0; font-size: 8.5pt; }
+  .totals-table td:first-child { color: var(--ink-light); }
+  .totals-table td:last-child { text-align: right; font-weight: 500; }
+  .total-final td { border-top: 1.5px solid var(--ink); padding-top: 8px !important; font-weight: 700 !important; font-size: 10.5pt !important; color: var(--ink) !important; }
+
+  .doc-notes { border-top: 1px solid var(--line); padding-top: 18px; color: var(--ink-light); font-size: 8pt; line-height: 1.65; }
+  .doc-footer { position: absolute; bottom: 32px; left: 60px; right: 60px; display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 12px; font-size: 7.5pt; color: var(--ink-faint); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: white; padding: 10px 20px;
+    border-radius: 20px; font-size: 0.82rem; font-weight: 500;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 200;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Desktop: naast elkaar */
+  @media (min-width: 768px) {
+    html, body { overflow: auto; }
+    .tabs, .bottom-bar { display: none; }
+    .panels { overflow: visible; flex: 1; }
+    .panel { position: static; display: block !important; overflow: visible; padding: 0; }
+    body { flex-direction: column; overflow: auto; }
+
+    .desktop-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: calc(100vh - var(--topbar-h));
+    }
+    .desktop-sidebar {
+      background: var(--white);
+      border-right: 1px solid var(--line);
+      padding: 28px 24px 40px;
+      overflow-y: auto;
+      max-height: calc(100vh - var(--topbar-h));
+      position: sticky;
+      top: var(--topbar-h);
+    }
+    .desktop-preview {
+      background: #e8e7e2;
+      padding: 36px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .preview-panel { display: block !important; }
+    .topbar { padding: 0 28px; }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .btn-pdf-top {
+      background: var(--accent);
+      color: var(--white);
+      border: none;
+      padding: 9px 22px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .btn-pdf-top:hover { background: var(--accent-light); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-title">Factuur<span>Studio</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="topbar-num" id="topbar-num">2026-0001</div>
+    <!-- Desktop export knop -->
+    <button class="btn-pdf-top" onclick="exportPDF()" style="display:none" id="desktop-export-btn">↓ PDF exporteren</button>
+  </div>
+</div>
+
+<!-- TABS (mobiel) -->
+<div class="tabs" id="mobile-tabs">
+  <div class="tab active" onclick="switchTab('form-bedrijf')" id="tab-form-bedrijf">
+    <span class="tab-icon">🏢</span>Bedrijf
+  </div>
+  <div class="tab" onclick="switchTab('form-klant')" id="tab-form-klant">
+    <span class="tab-icon">👤</span>Klant
+  </div>
+  <div class="tab" onclick="switchTab('form-factuur')" id="tab-form-factuur">
+    <span class="tab-icon">📋</span>Factuur
+  </div>
+  <div class="tab" onclick="switchTab('preview')" id="tab-preview">
+    <span class="tab-icon">👁</span>Voorbeeld
+  </div>
+</div>
+
+<!-- PANELS WRAPPER -->
+<div class="panels" id="panels-wrapper">
+
+  <!-- MOBIEL: afzonderlijke panels | DESKTOP: in sidebar -->
+  <div class="panel active" id="panel-form-bedrijf">
+    <div class="section-label">Uw bedrijf</div>
+    <div class="field"><label>Bedrijfsnaam</label><input id="f-company" value="STUDIO VLDMN" oninput="save();render()"></div>
+    <div class="field"><label>Adres</label><input id="f-addr1" value="Pronkridder 11" oninput="save();render()"></div>
+    <div class="field-row">
+      <div class="field"><label>Postcode</label><input id="f-zip" value="9404MC" oninput="save();render()"></div>
+      <div class="field"><label>Plaats</label><input id="f-city" value="Assen" oninput="save();render()"></div>
+    </div>
+    <div class="field"><label>Land</label><input id="f-country" value="Nederland" oninput="save();render()"></div>
+    <div class="field-row">
+      <div class="field"><label>KvK nummer</label><input id="f-kvk" value="97177369" oninput="save();render()"></div>
+      <div class="field"><label>BTW nummer</label><input id="f-btw-own" value="" placeholder="NL..." oninput="save();render()"></div>
+    </div>
+    <div class="field"><label>IBAN</label><input id="f-iban" value="" placeholder="NL00 BANK 0000..." oninput="save();render()"></div>
+  </div>
+
+  <div class="panel" id="panel-form-klant">
+    <div class="section-label">Klantgegevens</div>
+    <div class="field"><label>Naam / Bedrijf</label><input id="c-name" value="" placeholder="Klantnaam" oninput="render()"></div>
+    <div class="field"><label>Adres</label><input id="c-addr" value="" placeholder="Straat en huisnummer" oninput="render()"></div>
+    <div class="field-row">
+      <div class="field"><label>Postcode</label><input id="c-zip" value="" oninput="render()"></div>
+      <div class="field"><label>Plaats</label><input id="c-city" value="" oninput="render()"></div>
+    </div>
+    <div class="field"><label>Land</label><input id="c-country" value="Nederland" oninput="render()"></div>
+    <div class="field-row">
+      <div class="field"><label>KvK nr</label><input id="c-kvk" value="" oninput="render()"></div>
+      <div class="field"><label>BTW nr</label><input id="c-btw" value="" oninput="render()"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-form-factuur">
+    <div class="section-label">Factuurgegevens</div>
+    <div class="field-row">
+      <div class="field"><label>Factuurnummer</label><input id="f-num" value="" oninput="save();render()"></div>
+      <div class="field"><label>Factuurdatum</label><input id="f-date" type="date" oninput="render()"></div>
+    </div>
+    <div class="field"><label>Order / referentie</label><input id="f-ref" value="" placeholder="bijv. Bol.com order-id" oninput="render()"></div>
+    <div class="field"><label>Vervaldatum</label><input id="f-due" type="date" oninput="render()"></div>
+
+    <div class="section-label">BTW instelling</div>
+    <div class="toggle-wrap">
+      <div class="toggle" id="btw-toggle" onclick="toggleBTW()"></div>
+      <label onclick="toggleBTW()">BTW toepassen</label>
+    </div>
+    <div class="field" id="btw-perc-wrap" style="display:none">
+      <label>BTW percentage (%)</label>
+      <input id="f-btw-pct" type="number" value="21" min="0" max="100" oninput="render()">
+    </div>
+
+    <div class="section-label">Regelitems</div>
+    <div id="items-container"></div>
+    <button class="btn-add" onclick="addItem()">+ Regel toevoegen</button>
+
+    <div class="section-label">Notities</div>
+    <div class="field">
+      <textarea id="f-notes" oninput="render()" placeholder="Bijv. betalingsinstructies, KOR-vermelding...">Betaling verloopt via Bol.com
+Factuur vrijgesteld van btw op grond van de kleineondernemersregeling (KOR)</textarea>
+    </div>
+  </div>
+
+  <!-- PREVIEW PANEL -->
+  <div class="panel preview-panel" id="panel-preview">
+    <div id="invoice-scale-wrap">
+      <div id="invoice-doc">
+        <div class="doc-header">
+          <div><div class="doc-logo" id="d-company">STUDIO VLDMN<small id="d-slogan"></small></div></div>
+          <div class="doc-meta">
+            <div class="factuur-title">Factuur</div>
+            <table id="d-meta-table">
+              <tr><td>Factuurnummer</td><td id="d-num">—</td></tr>
+              <tr><td>Datum</td><td id="d-date">—</td></tr>
+              <tr id="d-ref-row" style="display:none"><td>Referentie</td><td id="d-ref"></td></tr>
+              <tr id="d-due-row" style="display:none"><td>Vervaldatum</td><td id="d-due"></td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="doc-divider"></div>
+        <div class="addresses">
+          <div><div class="addr-label">Van</div><div class="addr-name" id="d-from-name"></div><div class="addr-body" id="d-from-addr"></div></div>
+          <div><div class="addr-label">Aan</div><div class="addr-name" id="d-to-name"></div><div class="addr-body" id="d-to-addr"></div></div>
+        </div>
+        <table class="items-table">
+          <thead><tr><th>Omschrijving</th><th>Aantal</th><th>Stukprijs</th><th>Totaal</th></tr></thead>
+          <tbody id="d-items-body"></tbody>
+        </table>
+        <div class="totals-wrap">
+          <table class="totals-table">
+            <tbody id="d-totals"></tbody>
+            <tbody><tr class="total-final"><td>Totaal bedrag</td><td id="d-grand-total">€ 0,00</td></tr></tbody>
+          </table>
+        </div>
+        <div class="doc-notes" id="d-notes"></div>
+        <div class="doc-footer"><div id="d-footer-left"></div><div id="d-footer-right"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM BAR (mobiel) -->
+<div class="bottom-bar" id="mobile-bottom">
+  <button class="btn-preview" onclick="switchTab('preview')">👁 Voorbeeld</button>
+  <button class="btn-pdf" onclick="exportPDF()">↓ Exporteer PDF</button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══ STATE ═══ */
+let useBTW = false;
+let items = [{ desc: '', qty: 1, price: 0 }];
+let currentTab = 'form-bedrijf';
+
+/* ═══ LOCALSTORAGE ═══ */
+const LS_KEY = 'factuutstudio_v1';
+
+function save() {
+  const data = {
+    company: g('f-company'), addr1: g('f-addr1'), zip: g('f-zip'),
+    city: g('f-city'), country: g('f-country'), kvk: g('f-kvk'),
+    btwOwn: g('f-btw-own'), iban: g('f-iban'),
+    invoiceNum: g('f-num'),
+    notes: g('f-notes')
+  };
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    sv('f-company', d.company); sv('f-addr1', d.addr1); sv('f-zip', d.zip);
+    sv('f-city', d.city); sv('f-country', d.country); sv('f-kvk', d.kvk);
+    sv('f-btw-own', d.btwOwn); sv('f-iban', d.iban);
+    sv('f-notes', d.notes);
+    if (d.invoiceNum) sv('f-num', d.invoiceNum);
+  } catch(e) {}
+}
+
+function sv(id, val) {
+  const el = document.getElementById(id);
+  if (el && val !== undefined && val !== null) el.value = val;
+}
+
+/* ═══ FACTUURNUMMER ═══ */
+function initInvoiceNumber() {
+  const existing = g('f-num');
+  if (existing) return; // al ingeladen via loadSaved
+  const year = new Date().getFullYear();
+  const stored = localStorage.getItem('factuutstudio_lastnum') || `${year}-0000`;
+  const next = incrementNum(stored);
+  sv('f-num', next);
+  localStorage.setItem('factuutstudio_lastnum', next);
+}
+
+function incrementNum(num) {
+  // Verwacht format YYYY-NNNN of gewoon een getal
+  const match = num.match(/^(\d{4})-(\d+)$/);
+  if (match) {
+    const year = new Date().getFullYear();
+    const seq = parseInt(match[2]) + 1;
+    return `${year}-${String(seq).padStart(4, '0')}`;
+  }
+  // Fallback: probeer puur getal op te hogen
+  const n = parseInt(num);
+  if (!isNaN(n)) return String(n + 1);
+  return num + '-2';
+}
+
+function bumpInvoiceNumber() {
+  const current = g('f-num');
+  const next = incrementNum(current);
+  sv('f-num', next);
+  localStorage.setItem('factuutstudio_lastnum', next);
+  save();
+  render();
+}
+
+/* ═══ TABS ═══ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const panelId = tab === 'preview' ? 'panel-preview' : `panel-${tab}`;
+  document.getElementById(panelId)?.classList.add('active');
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  if (tab === 'preview') scalePreview();
+}
+
+/* ═══ BTW ═══ */
+function toggleBTW() {
+  useBTW = !useBTW;
+  document.getElementById('btw-toggle').classList.toggle('on', useBTW);
+  document.getElementById('btw-perc-wrap').style.display = useBTW ? '' : 'none';
+  render();
+}
+
+/* ═══ ITEMS ═══ */
+function addItem() {
+  items.push({ desc: '', qty: 1, price: 0 });
+  renderItems();
+  render();
+}
+
+function removeItem(i) {
+  items.splice(i, 1);
+  renderItems();
+  render();
+}
+
+function renderItems() {
+  const c = document.getElementById('items-container');
+  c.innerHTML = '';
+  items.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.innerHTML = `
+      <div class="item-card-header">
+        <span>Regel ${i + 1}</span>
+        <button class="btn-del" onclick="removeItem(${i})">×</button>
+      </div>
+      <input value="${esc(item.desc)}" placeholder="Omschrijving" oninput="items[${i}].desc=this.value;render()">
+      <div class="item-nums">
+        <input type="number" value="${item.qty}" min="1" placeholder="Aantal" oninput="items[${i}].qty=parseFloat(this.value)||0;render()">
+        <input type="number" value="${item.price}" min="0" step="0.01" placeholder="Prijs (€)" oninput="items[${i}].price=parseFloat(this.value)||0;render()">
+      </div>`;
+    c.appendChild(card);
+  });
+}
+
+/* ═══ HELPERS ═══ */
+function esc(str) { return (str||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function g(id) { return document.getElementById(id)?.value || ''; }
+function fmt(n) { return '€\u00A0' + n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+function fmtDate(val) {
+  if (!val) return '—';
+  const [y,m,d] = val.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+/* ═══ RENDER PREVIEW ═══ */
+function render() {
+  const num = g('f-num');
+  document.getElementById('d-company').textContent = g('f-company') || '—';
+  document.getElementById('d-num').textContent = num || '—';
+  document.getElementById('topbar-num').textContent = num || '—';
+  document.getElementById('d-date').textContent = fmtDate(g('f-date'));
+
+  const ref = g('f-ref');
+  document.getElementById('d-ref-row').style.display = ref ? '' : 'none';
+  document.getElementById('d-ref').textContent = ref;
+
+  const due = g('f-due');
+  document.getElementById('d-due-row').style.display = due ? '' : 'none';
+  document.getElementById('d-due').textContent = fmtDate(due);
+
+  // Van
+  document.getElementById('d-from-name').textContent = g('f-company');
+  const fromParts = [g('f-addr1'), [g('f-zip'), g('f-city')].filter(Boolean).join(' '), g('f-country')];
+  const fromExtra = [g('f-kvk') ? `KvK: ${g('f-kvk')}` : '', g('f-btw-own') ? `BTW: ${g('f-btw-own')}` : ''].filter(Boolean);
+  document.getElementById('d-from-addr').innerHTML = [...fromParts, ...fromExtra].filter(Boolean).join('<br>');
+
+  // Aan
+  document.getElementById('d-to-name').textContent = g('c-name');
+  const toAddr = [g('c-addr'), [g('c-zip'), g('c-city')].filter(Boolean).join(' '), g('c-country')];
+  const toExtra = [g('c-kvk') ? `KvK: ${g('c-kvk')}` : '', g('c-btw') ? `BTW: ${g('c-btw')}` : ''].filter(Boolean);
+  document.getElementById('d-to-addr').innerHTML = [...toAddr, ...toExtra].filter(Boolean).join('<br>');
+
+  // Items
+  const tbody = document.getElementById('d-items-body');
+  tbody.innerHTML = '';
+  let subTotal = 0;
+  items.forEach(item => {
+    const total = (item.qty || 0) * (item.price || 0);
+    subTotal += total;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(item.desc) || '<em style="color:#ccc">—</em>'}</td><td style="text-align:right;color:var(--ink-light)">${item.qty}</td><td style="text-align:right;color:var(--ink-light)">${fmt(item.price)}</td><td style="text-align:right;color:var(--ink-light)">${fmt(total)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Totalen
+  const btwPct = parseFloat(g('f-btw-pct')) || 21;
+  const btwAmount = useBTW ? subTotal * (btwPct / 100) : 0;
+  const grandTotal = subTotal + btwAmount;
+  const dt = document.getElementById('d-totals');
+  dt.innerHTML = useBTW
+    ? `<tr><td>Subtotaal excl. BTW</td><td style="text-align:right;font-weight:500">${fmt(subTotal)}</td></tr><tr><td>BTW (${btwPct}%)</td><td style="text-align:right;font-weight:500">${fmt(btwAmount)}</td></tr>`
+    : `<tr><td>Subtotaal</td><td style="text-align:right;font-weight:500">${fmt(subTotal)}</td></tr>`;
+  document.getElementById('d-grand-total').textContent = fmt(grandTotal);
+
+  // Notities
+  const notes = g('f-notes');
+  const notesEl = document.getElementById('d-notes');
+  notesEl.innerHTML = notes ? notes.replace(/\n/g,'<br>') : '';
+  notesEl.style.display = notes ? '' : 'none';
+
+  // Footer
+  const iban = g('f-iban');
+  document.getElementById('d-footer-left').textContent = g('f-company');
+  document.getElementById('d-footer-right').textContent = iban ? `IBAN: ${iban}` : '';
+}
+
+/* ═══ SCHAAL PREVIEW OP MOBIEL ═══ */
+function scalePreview() {
+  const wrap = document.getElementById('invoice-scale-wrap');
+  const doc = document.getElementById('invoice-doc');
+  if (!wrap || !doc) return;
+  const panelW = document.getElementById('panel-preview').clientWidth || window.innerWidth;
+  const scale = Math.min(1, (panelW - 16) / 794);
+  doc.style.transform = `scale(${scale})`;
+  doc.style.transformOrigin = 'top center';
+  wrap.style.height = (1123 * scale + 20) + 'px';
+  wrap.style.display = 'flex';
+  wrap.style.justifyContent = 'center';
+}
+
+/* ═══ EXPORT PDF ═══ */
+function exportPDF() {
+  const el = document.getElementById('invoice-doc');
+  const num = g('f-num') || 'factuur';
+
+  // Reset schaal voor export
+  const savedTransform = el.style.transform;
+  el.style.transform = '';
+  el.style.transformOrigin = '';
+
+  const opt = {
+    margin: 0,
+    filename: `Factuur_${num}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'px', format: [794, 1123], orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(el).save().then(() => {
+    el.style.transform = savedTransform;
+    // Ophogen na export
+    bumpInvoiceNumber();
+    showToast(`✓ PDF opgeslagen · Volgend nr: ${g('f-num')}`);
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/* ═══ DESKTOP CHECK ═══ */
+function checkDesktop() {
+  const isDesktop = window.innerWidth >= 768;
+  document.getElementById('desktop-export-btn').style.display = isDesktop ? '' : 'none';
+  document.getElementById('mobile-tabs').style.display = isDesktop ? 'none' : '';
+  document.getElementById('mobile-bottom').style.display = isDesktop ? 'none' : '';
+
+  if (isDesktop) {
+    // Alle panels zichtbaar op desktop via CSS, maar we arrangeren ze in sidebar
+    buildDesktopLayout();
+  }
+}
+
+function buildDesktopLayout() {
+  const panels = document.getElementById('panels-wrapper');
+  if (panels.dataset.desktop) return;
+  panels.dataset.desktop = '1';
+
+  // Maak desktop wrapper
+  const layout = document.createElement('div');
+  layout.className = 'desktop-layout';
+
+  const sidebar = document.createElement('div');
+  sidebar.className = 'desktop-sidebar';
+
+  // Verplaats form panels naar sidebar
+  ['panel-form-bedrijf','panel-form-klant','panel-form-factuur'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.padding = '0';
+      sidebar.appendChild(el);
+    }
+  });
+
+  const preview = document.createElement('div');
+  preview.className = 'desktop-preview';
+  const previewPanel = document.getElementById('panel-preview');
+  if (previewPanel) {
+    previewPanel.style.padding = '0';
+    preview.appendChild(previewPanel);
+  }
+
+  layout.appendChild(sidebar);
+  layout.appendChild(preview);
+  panels.appendChild(layout);
+
+  scalePreview();
+}
+
+/* ═══ INIT ═══ */
+loadSaved();
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+initInvoiceNumber();
+renderItems();
+render();
+checkDesktop();
+window.addEventListener('resize', () => { scalePreview(); });
+
+/* ═══ SERVICE WORKER ═══ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
